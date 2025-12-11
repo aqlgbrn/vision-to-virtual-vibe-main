@@ -42,6 +42,7 @@ function Cart() {
     }
 
     const fetchCartItems = async () => {
+      console.log('Fetching cart items for user:', session.user.id);
       try {
         const { data, error } = await supabase
           .from('cart_items')
@@ -51,6 +52,8 @@ function Cart() {
           `)
           .eq('user_id', session.user.id);
 
+        console.log('Raw cart data from database:', data);
+
         if (error) {
           console.error('Error fetching cart items:', error);
           toast({
@@ -59,7 +62,18 @@ function Cart() {
             variant: "destructive"
           });
         } else {
+          // Check for duplicates
+          const productIds = data?.map((item: CartItem) => item.product_id) || [];
+          const uniqueProductIds = [...new Set(productIds)];
+          console.log('Product IDs:', productIds);
+          console.log('Unique Product IDs:', uniqueProductIds);
+          
+          if (productIds.length !== uniqueProductIds.length) {
+            console.warn('DUPLICATE ITEMS DETECTED!');
+          }
+          
           setCartItems(data || []);
+          console.log('Final cart items state:', data);
         }
       } catch (error) {
         console.error('Error:', error);
@@ -108,11 +122,19 @@ function Cart() {
   };
 
   const removeItem = async (id: string) => {
+    console.log('=== REMOVE ITEM START ===');
+    console.log('Removing item with ID:', id);
+    console.log('Current cart items before delete:', cartItems);
+    
     try {
-      const { error } = await supabase
+      const { data: deleteData, error } = await supabase
         .from('cart_items')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', session?.user.id)
+        .select(); // Return deleted data
+
+      console.log('Delete operation result:', { deleteData, error });
 
       if (error) {
         console.error('Error removing item:', error);
@@ -122,15 +144,50 @@ function Cart() {
           variant: "destructive"
         });
       } else {
-        setCartItems((items) => items.filter((item) => item.id !== id));
+        console.log('Item successfully deleted from database');
+        console.log('Deleted data:', deleteData);
+        
+        // Update local state immediately
+        const updatedItems = cartItems.filter((item) => item.id !== id);
+        console.log('Updated items (local):', updatedItems);
+        setCartItems(updatedItems);
+        
         toast({
           title: "Berhasil",
           description: "Item dihapus dari keranjang"
         });
+        
+        // Verify deletion by re-fetching from database
+        setTimeout(() => {
+          console.log('=== VERIFYING DELETION ===');
+          const verifyDeletion = async () => {
+            try {
+              const { data: currentData, error: fetchError } = await supabase
+                .from('cart_items')
+                .select(`
+                  *,
+                  product:products(*)
+                `)
+                .eq('user_id', session?.user.id);
+
+              if (!fetchError) {
+                console.log('Database state after delete:', currentData);
+                console.log('Item still exists?', currentData?.some((item: CartItem) => item.id === id));
+                setCartItems(currentData || []);
+              } else {
+                console.error('Error verifying deletion:', fetchError);
+              }
+            } catch (error) {
+              console.error('Error verifying deletion:', error);
+            }
+          };
+          verifyDeletion();
+        }, 1000);
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Unexpected error:', error);
     }
+    console.log('=== REMOVE ITEM END ===');
   };
 
   const subtotal = cartItems.reduce(
@@ -271,7 +328,10 @@ function Cart() {
                 <Button 
                   size="lg" 
                   className="w-full h-12 mb-3"
-                  onClick={() => navigate("/checkout")}
+                  onClick={() => {
+                    // Navigate with state to force refresh
+                    navigate("/checkout", { state: { refresh: Date.now() } });
+                  }}
                 >
                   Checkout
                 </Button>

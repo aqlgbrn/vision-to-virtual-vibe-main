@@ -6,11 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft, CreditCard, Truck, Package } from "lucide-react";
+import { ArrowLeft, CreditCard, Truck, Package, RefreshCw } from "lucide-react";
 
 interface CartItem {
   id: string;
@@ -29,6 +29,7 @@ interface CartItem {
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { session } = useAuth();
   const { toast } = useToast();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -51,6 +52,46 @@ export default function Checkout() {
       fetchCartItems();
     }
   }, [session]);
+
+  // Re-fetch cart items when page gains focus (user navigates back from cart)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && session) {
+        fetchCartItems();
+      }
+    };
+
+    const handleFocus = () => {
+      if (session) {
+        fetchCartItems();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [session]);
+
+  // Force refresh on mount with timestamp
+  useEffect(() => {
+    if (session) {
+      const timestamp = Date.now();
+      console.log('Checkout mounted at:', timestamp);
+      fetchCartItems();
+    }
+  }, [session, location.pathname]);
+
+  // Refresh when navigation state indicates refresh needed
+  useEffect(() => {
+    if (session && location.state?.refresh) {
+      console.log('Refresh triggered from navigation state');
+      fetchCartItems();
+    }
+  }, [location.state, session]);
 
   const fetchCartItems = async () => {
     try {
@@ -100,7 +141,13 @@ export default function Checkout() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('=== CHECKOUT SUBMIT START ===');
+    console.log('Form data:', shippingAddress);
+    console.log('Cart items:', cartItems);
+    console.log('Session:', session?.user);
+    
     if (!shippingAddress.name || !shippingAddress.phone || !shippingAddress.address) {
+      console.error('Validation failed - missing fields');
       toast({
         title: "Error",
         description: "Mohon lengkapi alamat pengiriman",
@@ -109,9 +156,20 @@ export default function Checkout() {
       return;
     }
 
+    if (cartItems.length === 0) {
+      console.error('No cart items found');
+      toast({
+        title: "Error", 
+        description: "Keranjang belanja kosong",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setProcessing(true);
 
     try {
+      console.log('Creating customer record...');
       // Create customer record first
       const { data: customer, error: customerError } = await supabase
         .from('customers')
@@ -121,13 +179,16 @@ export default function Checkout() {
           last_name: shippingAddress.name.split(' ').slice(1).join(' '),
           email: session?.user.email || '',
           phone: shippingAddress.phone
-        } as any)
+        } as any, { onConflict: 'user_id' })
         .select()
         .single();
+
+      console.log('Customer result:', { customer, customerError });
 
       if (customerError) throw customerError;
       if (!customer) throw new Error('Failed to create customer');
 
+      console.log('Creating order...');
       // Create order
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -154,9 +215,12 @@ export default function Checkout() {
         .select()
         .single();
 
+      console.log('Order result:', { order, orderError });
+
       if (orderError) throw orderError;
       if (!order) throw new Error('Failed to create order');
 
+      console.log('Creating order items...');
       // Create order items
       const orderItems = cartItems.map(item => ({
         order_id: (order as any).id,
@@ -167,34 +231,71 @@ export default function Checkout() {
         total_price: (item.product?.price || 0) * item.quantity
       }));
 
+      console.log('Order items to insert:', orderItems);
+
       const { error: itemsError } = await supabase
         .from('order_items')
         .insert(orderItems as any);
 
+      console.log('Order items result:', { itemsError });
+
       if (itemsError) throw itemsError;
 
-      // Clear cart
-      await supabase
+      console.log('Clearing cart...');
+      // Clear cart with verification
+      const { error: clearError } = await supabase
         .from('cart_items')
         .delete()
         .eq('user_id', session?.user.id);
 
+      console.log('Cart clear result:', { clearError });
+
+      if (clearError) {
+        console.error('Error clearing cart:', clearError);
+        // Continue anyway since order was created
+      } else {
+        console.log('Cart cleared successfully');
+        
+        // Verify cart is empty
+        const { data: remainingItems, error: verifyError } = await supabase
+          .from('cart_items')
+          .select('count')
+          .eq('user_id', session?.user.id);
+          
+        console.log('Cart verification:', { remainingItems, verifyError });
+        
+        if (!verifyError) {
+          const count = remainingItems?.length || 0;
+          console.log(`Items remaining in cart: ${count}`);
+          
+          if (count > 0) {
+            console.warn('Cart still has items after clear, forcing clear...');
+            // Force clear if verification fails
+            await supabase
+              .from('cart_items')
+              .delete()
+              .eq('user_id', session?.user.id);
+          }
+        }
+      }
+
       toast({
         title: "Berhasil",
-        description: "Pesanan Anda telah dibuat",
+        description: "Pesanan Anda telah dibuat dan keranjang telah dikosongkan",
       });
 
       navigate('/order-success');
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating order:', error);
       toast({
         title: "Error",
-        description: "Gagal membuat pesanan",
+        description: `Gagal membuat pesanan: ${error.message || 'Unknown error'}`,
         variant: "destructive"
       });
     } finally {
       setProcessing(false);
+      console.log('=== CHECKOUT SUBMIT END ===');
     }
   };
 
@@ -225,7 +326,7 @@ export default function Checkout() {
   }
 
   return (
-    <Layout>
+    <Layout key={location.pathname}>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-6">
           <Button 
@@ -353,7 +454,18 @@ export default function Checkout() {
           {/* Order Summary */}
           <div className="lg:col-span-1">
             <Card className="p-6 sticky top-4">
-              <h2 className="text-xl font-semibold mb-4">Ringkasan Pesanan</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Ringkasan Pesanan</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchCartItems()}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh
+                </Button>
+              </div>
               
               <div className="space-y-4 mb-6">
                 {cartItems.map((item) => (
