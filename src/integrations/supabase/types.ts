@@ -34,6 +34,18 @@ export type Database = {
             tags: string[]
             is_active: boolean
             created_at: string
+            // New fields from schema
+            slug: string
+            compare_price?: number
+            cost_price?: number
+            sku?: string
+            track_inventory: boolean
+            quantity: number
+            weight?: number
+            category_id?: string
+            status: string
+            featured: boolean
+            updated_at: string
           }
           Insert: {
             id?: string
@@ -83,6 +95,9 @@ export type Database = {
             user_id: string
             product_id: string
             quantity: number
+            // New fields from schema
+            session_id?: string
+            status: string
           }
           Insert: {
             id?: string
@@ -99,12 +114,247 @@ export type Database = {
             quantity?: number
           }
         }
+        categories: {
+          Row: {
+            id: string
+            name: string
+            slug: string
+            description?: string
+            image_url?: string
+            created_at: string
+            updated_at: string
+          }
+          Insert: {
+            id?: string
+            name: string
+            slug: string
+            description?: string
+            image_url?: string
+            created_at?: string
+            updated_at?: string
+          }
+          Update: {
+            id?: string
+            name?: string
+            slug?: string
+            description?: string
+            image_url?: string
+            created_at?: string
+            updated_at?: string
+          }
+        }
+        customers: {
+          Row: {
+            id: string
+            user_id?: string
+            first_name?: string
+            last_name?: string
+            email: string
+            phone?: string
+            address?: string
+            city?: string
+            province?: string
+            postal_code?: string
+            country?: string
+            total_orders: number
+            total_spent: number
+            created_at: string
+            updated_at: string
+          }
+          Insert: {
+            id?: string
+            user_id?: string
+            first_name?: string
+            last_name?: string
+            email: string
+            phone?: string
+            address?: string
+            city?: string
+            province?: string
+            postal_code?: string
+            country?: string
+            total_orders?: number
+            total_spent?: number
+            created_at?: string
+            updated_at?: string
+          }
+          Update: {
+            id?: string
+            user_id?: string
+            first_name?: string
+            last_name?: string
+            email?: string
+            phone?: string
+            address?: string
+            city?: string
+            province?: string
+            postal_code?: string
+            country?: string
+            total_orders?: number
+            total_spent?: number
+            created_at?: string
+            updated_at?: string
+          }
+        }
+        orders: {
+          Row: {
+            id: string
+            order_number: string
+            customer_id?: string
+            status: string
+            payment_status: string
+            payment_method?: string
+            subtotal: number
+            tax: number
+            shipping_cost: number
+            discount_amount: number
+            total_amount: number
+            currency?: string
+            notes?: string
+            shipping_address?: Json
+            billing_address?: Json
+            created_at: string
+            updated_at: string
+          }
+          Insert: {
+            id?: string
+            order_number?: string
+            customer_id?: string
+            status?: string
+            payment_status?: string
+            payment_method?: string
+            subtotal: number
+            tax?: number
+            shipping_cost?: number
+            discount_amount?: number
+            total_amount: number
+            currency?: string
+            notes?: string
+            shipping_address?: Json
+            billing_address?: Json
+            created_at?: string
+            updated_at?: string
+          }
+          Update: {
+            id?: string
+            order_number?: string
+            customer_id?: string
+            status?: string
+            payment_status?: string
+            payment_method?: string
+            subtotal?: number
+            tax?: number
+            shipping_cost?: number
+            discount_amount?: number
+            total_amount?: number
+            currency?: string
+            notes?: string
+            shipping_address?: Json
+            billing_address?: Json
+            created_at?: string
+            updated_at?: string
+          }
+        }
+        order_items: {
+          Row: {
+            id: string
+            order_id: string
+            product_id?: string
+            variant_id?: string
+            quantity: number
+            unit_price: number
+            total_price: number
+            product_name: string
+            product_sku?: string
+            created_at: string
+          }
+          Insert: {
+            id?: string
+            order_id: string
+            product_id?: string
+            variant_id?: string
+            quantity: number
+            unit_price: number
+            total_price: number
+            product_name: string
+            product_sku?: string
+            created_at?: string
+          }
+          Update: {
+            id?: string
+            order_id?: string
+            product_id?: string
+            variant_id?: string
+            quantity?: number
+            unit_price?: number
+            total_price?: number
+            product_name?: string
+            product_sku?: string
+            created_at?: string
+          }
+        }
+        product_variants: {
+          Row: {
+            id: string
+            product_id: string
+            name: string
+            sku?: string
+            price?: number
+            compare_price?: number
+            quantity: number
+            image_url?: string
+            created_at: string
+          }
+          Insert: {
+            id?: string
+            product_id: string
+            name: string
+            sku?: string
+            price?: number
+            compare_price?: number
+            quantity?: number
+            image_url?: string
+            created_at?: string
+          }
+          Update: {
+            id?: string
+            product_id?: string
+            name?: string
+            sku?: string
+            price?: number
+            compare_price?: number
+            quantity?: number
+            image_url?: string
+            created_at?: string
+          }
+        }
       }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      update_order_status: {
+        Args: {
+          p_order_id: string
+          p_new_status: string
+          p_changed_by?: string
+          p_changed_by_type?: string
+          p_notes?: string
+        }
+        Returns: boolean
+      }
+      create_order_from_cart: {
+        Args: {
+          p_user_id?: string
+          p_session_id: string
+          p_customer_data: Json
+          p_shipping_address: Json
+          p_billing_address: Json
+          p_payment_method: string
+          p_notes?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

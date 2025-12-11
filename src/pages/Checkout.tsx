@@ -112,33 +112,64 @@ export default function Checkout() {
     setProcessing(true);
 
     try {
+      // Create customer record first
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
+        .upsert({
+          user_id: session?.user.id || '',
+          first_name: shippingAddress.name.split(' ')[0],
+          last_name: shippingAddress.name.split(' ').slice(1).join(' '),
+          email: session?.user.email || '',
+          phone: shippingAddress.phone
+        } as any)
+        .select()
+        .single();
+
+      if (customerError) throw customerError;
+      if (!customer) throw new Error('Failed to create customer');
+
       // Create order
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           user_id: session?.user.id,
+          customer_id: (customer as any).id,
+          order_number: 'ORD' + Date.now(),
           total_amount: calculateTotal(),
           status: 'pending',
-          shipping_address: shippingAddress,
-          payment_method: paymentMethod,
-          shipping_method: shippingMethod
-        })
+          payment_status: 'pending',
+          shipping_address: JSON.stringify({
+            street: shippingAddress.address,
+            city: shippingAddress.city,
+            postal_code: shippingAddress.postalCode,
+            phone: shippingAddress.phone
+          }),
+          billing_address: JSON.stringify({
+            street: shippingAddress.address,
+            city: shippingAddress.city,
+            postal_code: shippingAddress.postalCode,
+            phone: shippingAddress.phone
+          })
+        } as any)
         .select()
         .single();
 
       if (orderError) throw orderError;
+      if (!order) throw new Error('Failed to create order');
 
       // Create order items
       const orderItems = cartItems.map(item => ({
-        order_id: order.id,
+        order_id: (order as any).id,
         product_id: item.product_id,
+        product_name: item.product?.name || '',
         quantity: item.quantity,
-        price: item.product?.price
+        unit_price: item.product?.price || 0,
+        total_price: (item.product?.price || 0) * item.quantity
       }));
 
       const { error: itemsError } = await supabase
         .from('order_items')
-        .insert(orderItems);
+        .insert(orderItems as any);
 
       if (itemsError) throw itemsError;
 

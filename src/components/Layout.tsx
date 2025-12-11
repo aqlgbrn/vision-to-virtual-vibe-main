@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, User, LogOut, Sparkles, Home, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShoppingCart, User, LogOut, Sparkles, Home, ChevronLeft, ChevronRight, Shield, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Chatbot from '@/components/Chatbot';
 import { useAuth } from '@/contexts/AuthContext';
@@ -91,6 +91,11 @@ export const Layout = ({ children }: LayoutProps) => {
             </Button>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/products">Produk</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/orders">
+                <Package className="h-5 w-5" />
+              </Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/cart">

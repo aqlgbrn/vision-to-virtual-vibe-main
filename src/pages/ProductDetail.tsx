@@ -72,23 +72,43 @@ export default function ProductDetail() {
     if (!product) return;
 
     try {
-      const { error } = await supabase
+      // Check if item already exists with same size
+      const { data: existingItem } = await supabase
         .from('cart_items')
-        .upsert({
-          user_id: session.user.id,
-          product_id: product.id,
-          quantity: quantity,
-          selected_size: selectedSize
-        } as any, {
-          onConflict: 'user_id,product_id'
-        });
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('product_id', product.id)
+        .eq('selected_size', selectedSize)
+        .single();
 
-      if (error) throw error;
-      
-      toast.success("Produk berhasil ditambahkan ke keranjang!");
-    } catch (error) {
+      if (existingItem) {
+        // Update quantity if item exists
+        const { error } = await supabase
+          .from('cart_items')
+          .update({ 
+            quantity: (existingItem as any).quantity + quantity 
+          } as any)
+          .eq('id', (existingItem as any).id);
+
+        if (error) throw error;
+        toast.success("Produk berhasil ditambahkan ke keranjang");
+      } else {
+        // Insert new item if not exists
+        const { error } = await supabase
+          .from('cart_items')
+          .insert({
+            user_id: session.user.id,
+            product_id: product.id,
+            quantity: quantity,
+            selected_size: selectedSize
+          } as any);
+
+        if (error) throw error;
+        toast.success("Produk berhasil ditambahkan ke keranjang");
+      }
+    } catch (error: any) {
       console.error('Error adding to cart:', error);
-      toast.error("Gagal menambahkan ke keranjang");
+      toast.error(error.message || "Gagal menambahkan ke keranjang");
     }
   };
 

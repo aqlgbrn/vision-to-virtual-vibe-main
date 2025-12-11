@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Force Refresh</title>
+</head>
+<body>
+    <h1>Force Refresh Dashboard</h1>
+    <p>Click the button below to clear cache and reload admin dashboard:</p>
+    <button onclick="clearCacheAndReload()">Clear Cache & Reload Admin</button>
+    
+    <script>
+        function clearCacheAndReload() {
+            // Clear all caches
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    names.forEach(function(name) {
+                        caches.delete(name);
+                    });
+                });
+            }
+            
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            // Force reload with cache busting
+            window.location.href = '/admin?_=' + Date.now();
+        }
+    </script>
+</body>
+</html>
